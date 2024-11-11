@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      1.3
 // @description  Autoplay audio files in sequence on AnkiWeb
-// @match        https://ankiuser.net/study/*
+// @match        https://ankiuser.net/*
 // @grant        none
 // ==/UserScript==
 
