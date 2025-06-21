@@ -1,23 +1,35 @@
 // ==UserScript==
 // @name         AnkiWeb Sequential Audio Autoplay
 // @namespace    http://tampermonkey.net/
-// @version      1.3.1
+// @version      1.3.2
 // @description  Autoplay audio files in sequence on AnkiWeb
 // @match        https://ankiuser.net/*
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
-    let isPlaying = false; // flag to prevent multiple triggers
+    let isPlaying = false;
+    let lastAudioSet = "";
+
+    function serializeAudioElements(audioElements) {
+        // Serialize audio srcs into a string for comparison
+        return Array.from(audioElements).map(a => a.src).join("|");
+    }
 
     function playAudioSequentially() {
         const audioElements = document.querySelectorAll("audio");
-        if (audioElements.length === 0 || isPlaying) return;
+        const currentAudioSet = serializeAudioElements(audioElements);
+
+        // Skip if no audio or still playing the same set
+        if (audioElements.length === 0) return;
+        if (isPlaying && currentAudioSet === lastAudioSet) return;
+
+        lastAudioSet = currentAudioSet;
+        isPlaying = true;
 
         let currentIndex = 0;
-        isPlaying = true;
 
         function playNext() {
             if (currentIndex >= audioElements.length) {
@@ -44,7 +56,6 @@
         playNext();
     }
 
-    // MutationObserver to detect new cards/audio loaded
     const observer = new MutationObserver((mutations) => {
         for (let mutation of mutations) {
             if ([...mutation.addedNodes].some(node => node.querySelector?.("audio"))) {
@@ -56,8 +67,7 @@
 
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // Optional: initial check if audio already loaded
     window.addEventListener('load', () => {
-        setTimeout(playAudioSequentially, 500); // slight delay to wait for DOM
+        setTimeout(playAudioSequentially, 500);
     });
 })();
