@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnkiWeb Sequential Audio Autoplay
 // @namespace    http://tampermonkey.net/
-// @version      1.3.2
+// @version      1.3.4
 // @description  Autoplay audio files in sequence on AnkiWeb
 // @match        https://ankiuser.net/*
 // @grant        none
@@ -10,32 +10,36 @@
 (function () {
     'use strict';
 
-    let isPlaying = false;
-    let lastAudioSet = "";
+    let currentPlayback = {
+        audioSetHash: "",
+        abort: () => {}
+    };
 
     function serializeAudioElements(audioElements) {
-        // Serialize audio srcs into a string for comparison
-        return Array.from(audioElements).map(a => a.src).join("|");
+        return Array.from(audioElements).map(a => a.src).join("|") || "NO_AUDIO";
     }
 
     function playAudioSequentially() {
         const audioElements = document.querySelectorAll("audio");
         const currentAudioSet = serializeAudioElements(audioElements);
 
-        // Skip if no audio or still playing the same set
-        if (audioElements.length === 0) return;
-        if (isPlaying && currentAudioSet === lastAudioSet) return;
+        // Always abort previous playback if audio set changes
+        if (currentAudioSet !== currentPlayback.audioSetHash) {
+            currentPlayback.abort(); // cancel old
+            currentPlayback.audioSetHash = currentAudioSet; // update hash
+        }
 
-        lastAudioSet = currentAudioSet;
-        isPlaying = true;
+        if (audioElements.length === 0) return; // nothing to play
 
         let currentIndex = 0;
+        let aborted = false;
+
+        currentPlayback.abort = () => {
+            aborted = true;
+        };
 
         function playNext() {
-            if (currentIndex >= audioElements.length) {
-                isPlaying = false;
-                return;
-            }
+            if (aborted || currentIndex >= audioElements.length) return;
 
             const audio = audioElements[currentIndex];
             audio.removeAttribute("controls");
@@ -44,12 +48,13 @@
                 console.log(`Playing audio ${currentIndex + 1} of ${audioElements.length}`);
             }).catch(error => {
                 console.warn("Playback error:", error);
-                isPlaying = false;
             });
 
             audio.onended = () => {
-                currentIndex++;
-                playNext();
+                if (!aborted) {
+                    currentIndex++;
+                    playNext();
+                }
             };
         }
 
@@ -58,8 +63,9 @@
 
     const observer = new MutationObserver((mutations) => {
         for (let mutation of mutations) {
-            if ([...mutation.addedNodes].some(node => node.querySelector?.("audio"))) {
-                playAudioSequentially();
+            if ([...mutation.addedNodes].some(node => node.querySelector?.("audio") || node.nodeName === "DIV")) {
+                // always try playback on any mutation (even if audio belum muncul langsung)
+                setTimeout(playAudioSequentially, 100); // delay to let DOM update
                 break;
             }
         }
